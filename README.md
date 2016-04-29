@@ -21,7 +21,10 @@ Tickcount is 51106
 Run 1965 loops
 ```
 
+Volunteers wanted
+-----------------
 Parallel computing is a 'game-changing' technology, could be considered as a Million-Human-Year project, all contributions are welcomed, including but not limit to:
+```
 	High level programming language and compiler
 	Parallel algorithm and data structure
 	Artificial Intelligence
@@ -34,7 +37,7 @@ Parallel computing is a 'game-changing' technology, could be considered as a Mil
 	Peripheral
 	...
 	Applications
-
+```
 
 Getting started
 ---------------
