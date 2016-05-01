@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	LogicSize  = 2000
+	LogicSize  = 2048
 	MemorySize = 32768
 )
 
@@ -26,7 +26,7 @@ func main() {
 	sortComputer.Init(program.NewSum)
 	sortComputer.Run()
 
-	sortComputer.Init(program.NewSorting)
+	sortComputer.Init(program.NewBubbleSort)
 	sortComputer.Run()
 }
 

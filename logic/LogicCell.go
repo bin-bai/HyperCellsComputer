@@ -10,38 +10,51 @@ import (
 
 const (
 	// Instructions begin
-	NOP = types.HCWORD(0)
-	ID  = types.HCWORD(2)
+	NOP  = types.HCWORD(0)
+	HALT = types.HCWORD(1)
+	ID   = types.HCWORD(2)
 
-	HALT    = types.HCWORD(11)
-	REC     = types.HCWORD(12)
-	JMP     = types.HCWORD(13)
-	FORWARD = types.HCWORD(14)
-	CMP     = types.HCWORD(16)
+	REC     = types.HCWORD(10)
+	JMP     = types.HCWORD(11)
+	FORWARD = types.HCWORD(12)
 
-	SET  = types.HCWORD(21)
-	COPY = types.HCWORD(22)
+	CMP    = types.HCWORD(20)
+	IFZERO = types.HCWORD(21)
 
-	LOAD  = types.HCWORD(31)
-	SETMR = types.HCWORD(32)
-	SETMD = types.HCWORD(33)
+	PUSH   = types.HCWORD(31)
+	POP    = types.HCWORD(32)
+	MARK   = types.HCWORD(33)
+	FUNC   = types.HCWORD(34)
+	RETURN = types.HCWORD(35)
 
-	ORFLAG  = types.HCWORD(41)
-	ANDFLAG = types.HCWORD(42)
+	SET  = types.HCWORD(50)
+	COPY = types.HCWORD(51)
 
-	LOCK   = types.HCWORD(51)
-	UNLOCK = types.HCWORD(52)
+	LOAD  = types.HCWORD(60)
+	SETMR = types.HCWORD(62)
+	SETMD = types.HCWORD(63)
 
-	ADD = types.HCWORD(61)
-	SUB = types.HCWORD(62)
-	MUL = types.HCWORD(63)
-	DIV = types.HCWORD(64)
+	ADD = types.HCWORD(100)
+	SUB = types.HCWORD(101)
+	MUL = types.HCWORD(102)
+	DIV = types.HCWORD(103)
 
-	INC = types.HCWORD(65)
-	DEC = types.HCWORD(66)
+	INC = types.HCWORD(110)
+	DEC = types.HCWORD(111)
 
-	SHIFTL = types.HCWORD(71)
-	SHIFTR = types.HCWORD(72)
+	SHIFTL = types.HCWORD(120)
+	SHIFTR = types.HCWORD(121)
+
+	GETFLAG = types.HCWORD(500)
+	ORFLAG  = types.HCWORD(501)
+	ANDFLAG = types.HCWORD(502)
+
+	LOCK   = types.HCWORD(510)
+	UNLOCK = types.HCWORD(511)
+
+	TOCELL = types.HCWORD(600)
+	IFIN   = types.HCWORD(601)
+	GETIN  = types.HCWORD(602)
 	// Instructions end
 
 	// Instruction registers begin
@@ -58,8 +71,10 @@ const (
 	// Instruction registers end
 
 	// User registers begin
-	userRegSize  = 32
-	USER_REG_TOP = userRegSize - 1
+	UserRegSize = 32
+
+	R_RET      = UserRegSize - 1
+	R_USER_TOP = R_RET - 1
 	// User registers end
 )
 
@@ -67,30 +82,48 @@ var (
 	busslot bus.Bus
 
 	oprandCount = [...]types.HCWORD{
-		NOP:     types.HCWORD(0),
-		ID:      types.HCWORD(1),
-		HALT:    types.HCWORD(0),
+		NOP:  types.HCWORD(0),
+		HALT: types.HCWORD(0),
+		ID:   types.HCWORD(1),
+
 		REC:     types.HCWORD(1),
 		JMP:     types.HCWORD(1),
 		FORWARD: types.HCWORD(1),
-		CMP:     types.HCWORD(5),
-		SET:     types.HCWORD(2),
-		COPY:    types.HCWORD(2),
-		LOAD:    types.HCWORD(3),
-		SETMR:   types.HCWORD(2),
-		SETMD:   types.HCWORD(2),
+
+		CMP:    types.HCWORD(5),
+		IFZERO: types.HCWORD(3),
+
+		PUSH:   types.HCWORD(1),
+		POP:    types.HCWORD(1),
+		MARK:   types.HCWORD(1),
+		FUNC:   types.HCWORD(0),
+		RETURN: types.HCWORD(0),
+
+		SET:  types.HCWORD(2),
+		COPY: types.HCWORD(2),
+
+		LOAD:  types.HCWORD(3),
+		SETMR: types.HCWORD(2),
+		SETMD: types.HCWORD(2),
+
+		ADD:    types.HCWORD(3),
+		SUB:    types.HCWORD(3),
+		MUL:    types.HCWORD(3),
+		DIV:    types.HCWORD(3),
+		INC:    types.HCWORD(1),
+		DEC:    types.HCWORD(1),
+		SHIFTL: types.HCWORD(2),
+		SHIFTR: types.HCWORD(2),
+
+		GETFLAG: types.HCWORD(2),
 		ORFLAG:  types.HCWORD(2),
 		ANDFLAG: types.HCWORD(2),
 		LOCK:    types.HCWORD(3),
 		UNLOCK:  types.HCWORD(2),
-		ADD:     types.HCWORD(3),
-		SUB:     types.HCWORD(3),
-		MUL:     types.HCWORD(3),
-		DIV:     types.HCWORD(3),
-		INC:     types.HCWORD(1),
-		DEC:     types.HCWORD(1),
-		SHIFTL:  types.HCWORD(2),
-		SHIFTR:  types.HCWORD(2),
+
+		TOCELL: types.HCWORD(4),
+		IFIN:   types.HCWORD(2),
+		GETIN:  types.HCWORD(2),
 	}
 )
 
@@ -100,7 +133,10 @@ func SetBus(b bus.Bus) {
 
 type LogicCell struct {
 	id types.HCWORD
+
 	PC types.HCWORD
+
+	Stack []types.HCWORD
 
 	instruction []types.HCWORD
 	registers   []types.HCWORD
@@ -108,6 +144,9 @@ type LogicCell struct {
 	pendingaddr types.HCWORD
 	pendingsize types.HCWORD
 	pendingdest types.HCWORD
+
+	incomeaddr types.HCWORD
+	incomesize types.HCWORD
 }
 
 func (lc *LogicCell) Init(id types.HCWORD) {
@@ -115,7 +154,13 @@ func (lc *LogicCell) Init(id types.HCWORD) {
 	lc.PC = -1
 
 	lc.instruction = make([]types.HCWORD, instRegSize)
-	lc.registers = make([]types.HCWORD, userRegSize)
+	lc.registers = make([]types.HCWORD, UserRegSize)
+
+	lc.pendingaddr = -1
+	lc.pendingsize = -1
+
+	lc.incomeaddr = -1
+	lc.incomesize = -1
 }
 
 func (lc *LogicCell) Halt() {
@@ -126,9 +171,6 @@ func (lc *LogicCell) Tick() {
 	if lc.PC < 0 {
 		return
 	}
-
-	lc.pendingaddr = 0
-	lc.pendingsize = 0
 
 	// Load instruction
 	err := busslot.Load(lc.PC, lc.instruction[instReg:instReg+1])
@@ -148,20 +190,23 @@ func (lc *LogicCell) Tick() {
 	}
 
 	nextpc := lc.PC + oc + 1
+
 	switch lc.instruction[instReg] {
 	case NOP:
-	// Pass
-	case ID:
-		lc.registers[lc.instruction[oprand1]] = lc.id
+		// Pass
 	case HALT:
 		lc.Halt()
 		return
+	case ID:
+		lc.registers[lc.instruction[oprand1]] = lc.id
+
 	case REC:
 		lc.registers[lc.instruction[oprand1]] = lc.PC + 2
 	case JMP:
 		nextpc = lc.registers[lc.instruction[oprand1]]
 	case FORWARD:
 		nextpc = lc.PC + lc.instruction[oprand1]
+
 	case CMP:
 		left := lc.registers[lc.instruction[oprand1]]
 		right := lc.registers[lc.instruction[oprand2]]
@@ -173,10 +218,34 @@ func (lc *LogicCell) Tick() {
 		default:
 			nextpc = lc.PC + lc.instruction[oprand5]
 		}
+	case IFZERO:
+		if lc.registers[lc.instruction[oprand1]] == 0 {
+			nextpc = lc.PC + lc.instruction[oprand2]
+		} else {
+			nextpc = lc.PC + lc.instruction[oprand3]
+		}
+
+	case PUSH:
+		lc.Stack = append(lc.Stack, lc.registers[lc.instruction[oprand1]])
+	case POP:
+		top := len(lc.Stack) - 1
+		lc.registers[lc.instruction[oprand1]] = lc.Stack[top]
+		lc.Stack = lc.Stack[0:top]
+	case MARK:
+		lc.Stack = append(lc.Stack, lc.PC+lc.instruction[oprand1])
+	case FUNC:
+		// Pass
+	case RETURN:
+		top := len(lc.Stack) - 1
+		lc.registers[R_RET] = lc.Stack[top]
+		lc.Stack = lc.Stack[0:top]
+		nextpc = lc.registers[R_RET]
+
 	case SET:
 		lc.registers[lc.instruction[oprand1]] = lc.instruction[oprand2]
 	case COPY:
 		lc.registers[lc.instruction[oprand1]] = lc.registers[lc.instruction[oprand2]]
+
 	case LOAD:
 		size := lc.instruction[oprand2]
 		dest := lc.instruction[oprand3]
@@ -189,14 +258,7 @@ func (lc *LogicCell) Tick() {
 		busslot.Set(lc.registers[lc.instruction[oprand1]], lc.registers[lc.instruction[oprand2]])
 	case SETMD:
 		busslot.Set(lc.registers[lc.instruction[oprand1]], lc.instruction[oprand2])
-	case ORFLAG:
-		busslot.OrFlag(lc.instruction[oprand1], lc.registers[lc.instruction[oprand2]])
-	case ANDFLAG:
-		busslot.AndFlag(lc.instruction[oprand1], lc.registers[lc.instruction[oprand2]])
-	case LOCK:
-		lc.DeferLock(lc.registers[lc.instruction[oprand1]], lc.instruction[oprand2], lc.instruction[oprand3])
-	case UNLOCK:
-		busslot.Unlock(lc.registers[lc.instruction[oprand1]], lc.instruction[oprand2])
+
 	case ADD:
 		lc.registers[lc.instruction[oprand1]] = lc.registers[lc.instruction[oprand2]] + lc.registers[lc.instruction[oprand3]]
 	case SUB:
@@ -205,14 +267,44 @@ func (lc *LogicCell) Tick() {
 		lc.registers[lc.instruction[oprand1]] = lc.registers[lc.instruction[oprand2]] * lc.registers[lc.instruction[oprand3]]
 	case DIV:
 		lc.registers[lc.instruction[oprand1]] = lc.registers[lc.instruction[oprand2]] / lc.registers[lc.instruction[oprand3]]
+
 	case INC:
 		lc.registers[lc.instruction[oprand1]]++
 	case DEC:
 		lc.registers[lc.instruction[oprand1]]--
+
 	case SHIFTL:
 		lc.registers[lc.instruction[oprand1]] <<= lc.instruction[oprand2].Abs()
 	case SHIFTR:
 		lc.registers[lc.instruction[oprand1]] >>= lc.instruction[oprand2].Abs()
+
+	case GETFLAG:
+		lc.registers[lc.instruction[oprand2]] = busslot.GetFlag(lc.instruction[oprand1])
+	case ORFLAG:
+		busslot.OrFlag(lc.instruction[oprand1], lc.registers[lc.instruction[oprand2]])
+	case ANDFLAG:
+		busslot.AndFlag(lc.instruction[oprand1], lc.registers[lc.instruction[oprand2]])
+	case LOCK:
+		lc.DeferLock(lc.registers[lc.instruction[oprand1]], lc.instruction[oprand2], lc.instruction[oprand3])
+	case UNLOCK:
+		busslot.Unlock(lc.registers[lc.instruction[oprand1]], lc.instruction[oprand2])
+
+	case TOCELL:
+		src := lc.instruction[oprand3]
+		size := lc.instruction[oprand4]
+		values := lc.registers[src : src+size]
+		busslot.ToCell(lc.registers[lc.instruction[oprand1]], lc.instruction[oprand2], values)
+	case IFIN:
+		if lc.incomeaddr >= 0 && lc.incomesize >= 0 {
+			nextpc = lc.PC + lc.instruction[oprand1]
+		} else {
+			nextpc = lc.PC + lc.instruction[oprand2]
+		}
+	case GETIN:
+		lc.registers[lc.instruction[oprand1]] = lc.incomeaddr
+		lc.registers[lc.instruction[oprand2]] = lc.incomesize
+		lc.incomeaddr = -1
+		lc.incomesize = -1
 	default:
 		lc.Halt()
 		return
@@ -235,4 +327,14 @@ func (lc *LogicCell) GetPendingLock() (addr types.HCWORD, size types.HCWORD) {
 
 func (lc *LogicCell) SetLockResult(result types.HCWORD) {
 	lc.registers[lc.pendingdest] = result
+
+	lc.pendingaddr = -1
+	lc.pendingsize = -1
+}
+
+func (lc *LogicCell) Set(addr types.HCWORD, values []types.HCWORD) {
+	copy(lc.registers[addr:], values)
+
+	lc.incomeaddr = addr
+	lc.incomesize = types.HCWORD(len(values))
 }

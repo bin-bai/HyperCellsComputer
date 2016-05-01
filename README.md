@@ -3,7 +3,7 @@ A research project of parallel computing, which consists massive ALU as hyper ce
 
 Below example uses 2000 cells, which handle about 4000 integers.
 
-The first example is in-place addition of O(logn):
+The first example is in-place addition of O(logn), with only 22 asm instructions:
 ```
 [1 2 3 ... 3998 3999 4000]
 [8002000 0 0 ... 0 0 0]
@@ -12,7 +12,7 @@ Tickcount is 188
 Run 14 loops
 ```
 
-The second example is naive in-place sorting of O(n):
+The second example is naive in-place sorting of O(n), with only 20 asm instructions:
 ```
 [8384 1205 7869 ... 7876 9751 3306]
 [1 1 3 ... 9988 9989 9996]
@@ -21,9 +21,9 @@ Tickcount is 51106
 Run 1965 loops
 ```
 
-Volunteers wanted
+TODO
 -----------------
-Parallel computing is a 'game-changing' technology, could be considered as a Million-Human-Year project, all contributions are welcomed, including but not limit to:
+Parallel computing is a 'game-changing' technology, could be considered as a Million-Human-Year project. There are tons of researches on it, including but not limit to:
 ```
 	High level programming language and compiler
 	Parallel algorithm and data structure

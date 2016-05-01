@@ -43,7 +43,9 @@ func NewComputer(logicSize, memorySize types.HCWORD) *Computer {
 	c.LogicCells = make([]logic.LogicCell, logicSize)
 	for i := range c.LogicCells {
 		c.LogicCells[i].Init(types.HCWORD(i))
-		c.Bus.Penders[i] = &c.LogicCells[i]
+		c.LogicCells[i].Stack = make([]types.HCWORD, 0, 20)
+
+		c.Bus.Cells[i] = &c.LogicCells[i]
 	}
 
 	return c

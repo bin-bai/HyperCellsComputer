@@ -14,7 +14,7 @@ const (
 
 // Programmable CPU-Memory Bus Array
 type PCMBA struct {
-	Penders []Pender
+	Cells []Cell
 
 	MemoryBank *mem.MemoryBank
 
@@ -25,13 +25,23 @@ type PCMBA struct {
 }
 
 func (ba *PCMBA) Init(logicSize types.HCWORD, mb *mem.MemoryBank) {
-	ba.Penders = make([]Pender, logicSize)
+	ba.Cells = make([]Cell, logicSize)
 
 	ba.MemoryBank = mb
 	ba.locked = make([]bool, mb.Size())
 	ba.lockers = make([]byte, mb.Size())
 
 	ba.flags = make([]types.HCWORD, FLAGS_SIZE)
+}
+
+func (ba *PCMBA) Load(addr types.HCWORD, dest []types.HCWORD) error {
+	if !ba.MemoryBank.In(addr) || !ba.MemoryBank.In(addr+types.HCWORD(len(dest)-1)) {
+		panic(1)
+		return NewIllegalAddressError(addr)
+	}
+
+	ba.MemoryBank.ReadBatch(addr, dest)
+	return nil
 }
 
 func (ba *PCMBA) Set(addr types.HCWORD, value types.HCWORD) error {
@@ -49,13 +59,21 @@ func (ba *PCMBA) Set(addr types.HCWORD, value types.HCWORD) error {
 	return nil
 }
 
-func (ba *PCMBA) Load(addr types.HCWORD, dest []types.HCWORD) error {
-	if !ba.MemoryBank.In(addr) || !ba.MemoryBank.In(addr+types.HCWORD(len(dest)-1)) {
+func (ba *PCMBA) SetBatch(addr types.HCWORD, values []types.HCWORD) error {
+	if !ba.MemoryBank.In(addr) || !ba.MemoryBank.In(addr+types.HCWORD(len(values)-1)) {
 		panic(1)
 		return NewIllegalAddressError(addr)
 	}
 
-	ba.MemoryBank.ReadBatch(addr, dest)
+	for i := range values {
+		if ba.locked[addr+types.HCWORD(i)] {
+			panic(2)
+			return errors.New("Attemp to write locked memory")
+		}
+	}
+
+	ba.MemoryBank.WriteBatch(addr, values)
+
 	return nil
 }
 
@@ -91,6 +109,16 @@ func (ba *PCMBA) Unlock(addr types.HCWORD, size types.HCWORD) {
 	}
 }
 
+func (ba *PCMBA) ToCell(id, addr types.HCWORD, values []types.HCWORD) error {
+	if id < 0 || id >= types.HCWORD(len(ba.Cells)) {
+		panic(10)
+		return NewIllegalAddressError(id)
+	}
+
+	ba.Cells[id].Set(addr, values)
+	return nil
+}
+
 func (ba *PCMBA) PreTick() {
 	for i := range ba.lockers {
 		ba.lockers[i] = 0
@@ -106,8 +134,8 @@ func (ba *PCMBA) Tick() {
 func (ba *PCMBA) handleLocks() {
 	var addr, size types.HCWORD
 
-	for i := range ba.Penders {
-		addr, size = ba.Penders[i].GetPendingLock()
+	for i := range ba.Cells {
+		addr, size = ba.Cells[i].GetPendingLock()
 		if addr <= 0 || size <= 0 {
 			continue
 		}
@@ -124,9 +152,9 @@ func (ba *PCMBA) handleLocks() {
 			for k := 0; types.HCWORD(k) < size; k++ {
 				ba.locked[addr+types.HCWORD(k)] = true
 			}
-			ba.Penders[i].SetLockResult(1)
+			ba.Cells[i].SetLockResult(1)
 		} else {
-			ba.Penders[i].SetLockResult(0)
+			ba.Cells[i].SetLockResult(0)
 		}
 	}
 }

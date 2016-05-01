@@ -14,6 +14,8 @@ type Program interface {
 
 	GetDataSize() types.HCWORD
 	GetData(dest []types.HCWORD)
+
+	Finished() bool
 }
 
 type Newer func(args ...types.HCWORD) Program
