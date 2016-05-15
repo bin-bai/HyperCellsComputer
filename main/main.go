@@ -5,6 +5,7 @@ import (
 	"flag"
 	"log"
 	"os"
+	"runtime"
 	"runtime/debug"
 	"runtime/pprof"
 
@@ -21,6 +22,8 @@ func main() {
 	oninit()
 	defer onexit()
 
+	runtime.GOMAXPROCS(runtime.NumCPU() - 1)
+
 	sortComputer := computer.NewComputer(LogicSize, MemorySize)
 
 	sortComputer.Init(program.NewSum)
@@ -30,12 +33,15 @@ func main() {
 	sortComputer.Run()
 }
 
-var cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
-var memprofile = flag.String("memprofile", "", "write memory profile to file")
-var heapdump = flag.String("heapdump", "", "write heap dump to file")
+var (
+	cpuprofile = flag.String("cpuprofile", "", "write cpu profile to file")
+	memprofile = flag.String("memprofile", "", "write memory profile to file")
+	heapdump   = flag.String("heapdump", "", "write heap dump to file")
+)
 
 func oninit() {
 	flag.Parse()
+
 	if len(*cpuprofile) > 0 {
 		f, err := os.Create(*cpuprofile)
 		if err != nil {
@@ -46,7 +52,9 @@ func oninit() {
 }
 
 func onexit() {
-	pprof.StopCPUProfile()
+	if len(*cpuprofile) > 0 {
+		pprof.StopCPUProfile()
+	}
 
 	if len(*memprofile) > 0 {
 		f, err := os.Create(*memprofile)

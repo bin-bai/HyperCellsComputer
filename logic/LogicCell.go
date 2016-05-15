@@ -81,7 +81,7 @@ const (
 var (
 	busslot bus.Bus
 
-	oprandCount = [...]types.HCWORD{
+	oprandCount = map[types.HCWORD]types.HCWORD{
 		NOP:  types.HCWORD(0),
 		HALT: types.HCWORD(0),
 		ID:   types.HCWORD(1),
@@ -167,6 +167,12 @@ func (lc *LogicCell) Halt() {
 	lc.PC = -1
 }
 
+func (lc *LogicCell) Fatal() {
+	if lc.PC > 0 {
+		lc.PC = -lc.PC
+	}
+}
+
 func (lc *LogicCell) Tick() {
 	if lc.PC < 0 {
 		return
@@ -175,16 +181,21 @@ func (lc *LogicCell) Tick() {
 	// Load instruction
 	err := busslot.Load(lc.PC, lc.instruction[instReg:instReg+1])
 	if err != nil {
-		lc.Halt()
+		lc.Fatal()
 		return
 	}
 
 	// Load oprand(s)
-	oc := oprandCount[lc.instruction[instReg]]
+	oc, ok := oprandCount[lc.instruction[instReg]]
+	if !ok {
+		lc.Fatal()
+		return
+	}
+
 	if oc > 0 {
 		err := busslot.Load(lc.PC+1, lc.instruction[oprand1:oprand1+oc])
 		if err != nil {
-			lc.Halt()
+			lc.Fatal()
 			return
 		}
 	}
@@ -229,6 +240,10 @@ func (lc *LogicCell) Tick() {
 		lc.Stack = append(lc.Stack, lc.registers[lc.instruction[oprand1]])
 	case POP:
 		top := len(lc.Stack) - 1
+		if top < 0 {
+			lc.Fatal()
+			return
+		}
 		lc.registers[lc.instruction[oprand1]] = lc.Stack[top]
 		lc.Stack = lc.Stack[0:top]
 	case MARK:
@@ -237,9 +252,12 @@ func (lc *LogicCell) Tick() {
 		// Pass
 	case RETURN:
 		top := len(lc.Stack) - 1
-		lc.registers[R_RET] = lc.Stack[top]
+		if top < 0 {
+			lc.Fatal()
+			return
+		}
+		nextpc = lc.Stack[top]
 		lc.Stack = lc.Stack[0:top]
-		nextpc = lc.registers[R_RET]
 
 	case SET:
 		lc.registers[lc.instruction[oprand1]] = lc.instruction[oprand2]
@@ -251,7 +269,7 @@ func (lc *LogicCell) Tick() {
 		dest := lc.instruction[oprand3]
 		err := busslot.Load(lc.registers[lc.instruction[oprand1]], lc.registers[dest:dest+size])
 		if err != nil {
-			lc.Halt()
+			lc.Fatal()
 			return
 		}
 	case SETMR:
@@ -306,7 +324,7 @@ func (lc *LogicCell) Tick() {
 		lc.incomeaddr = -1
 		lc.incomesize = -1
 	default:
-		lc.Halt()
+		lc.Fatal()
 		return
 	}
 

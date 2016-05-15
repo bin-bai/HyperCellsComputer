@@ -3,6 +3,8 @@ package computer
 
 import (
 	"fmt"
+	"runtime"
+	"sync"
 
 	"github.com/bin-bai/HyperCellsComputer/bus"
 	"github.com/bin-bai/HyperCellsComputer/logic"
@@ -29,6 +31,11 @@ type Computer struct {
 
 	tick   types.HCWORD
 	status types.HCWORD
+
+	// Try to accelerate execution by utilizing Go routines.
+	// Well, can't see improvement on Windows 10.
+	executers []*Executer
+	exeWG     sync.WaitGroup
 }
 
 func NewComputer(logicSize, memorySize types.HCWORD) *Computer {
@@ -46,6 +53,11 @@ func NewComputer(logicSize, memorySize types.HCWORD) *Computer {
 		c.LogicCells[i].Stack = make([]types.HCWORD, 0, 20)
 
 		c.Bus.Cells[i] = &c.LogicCells[i]
+	}
+
+	c.executers = make([]*Executer, runtime.GOMAXPROCS(0))
+	for i := range c.executers {
+		c.executers[i] = NewExecuter(&c.exeWG)
 	}
 
 	return c
@@ -72,6 +84,10 @@ func (c *Computer) Run() {
 	datasize := c.program.GetDataSize()
 	c.Print(dataaddr, dataaddr+datasize-1)
 
+	for i := range c.executers {
+		c.executers[i].Start()
+	}
+
 	// Clear flag
 	c.Bus.AndFlag(flagindex, types.HCWORD(0))
 
@@ -82,6 +98,7 @@ func (c *Computer) Run() {
 
 		// Check flag
 		if c.Bus.GetFlag(flagindex) != 0 {
+			// c.Print(dataaddr, dataaddr+datasize-1)
 			c.Bus.AndFlag(flagindex, types.HCWORD(0))
 			looptick = 0
 		} else {
@@ -93,8 +110,13 @@ func (c *Computer) Run() {
 		}
 	}
 
+	for i := range c.executers {
+		c.executers[i].Stop()
+	}
+
 	c.Print(dataaddr, dataaddr+datasize-1)
 
+	fmt.Println()
 	fmt.Printf("Tickcount is %d\n", c.tick)
 	fmt.Printf("Run %d loops\n\n", c.tick/ipl)
 }
@@ -102,9 +124,29 @@ func (c *Computer) Run() {
 func (c *Computer) Tick() {
 	c.Bus.PreTick()
 
-	for i := range c.LogicCells {
+	/*
+		for i := range c.LogicCells {
+			c.LogicCells[i].Tick()
+		}
+	*/
+
+	// Utilize Go routines begin
+	nlc := len(c.LogicCells)
+	nexe := len(c.executers)
+	cpree := nlc / nexe
+
+	c.exeWG.Add(nexe)
+
+	for i := 0; i < nexe; i++ {
+		c.executers[i].Exec(c.LogicCells[i*cpree : (i+1)*cpree])
+	}
+
+	for i := nexe * cpree; i < nlc; i++ {
 		c.LogicCells[i].Tick()
 	}
+
+	c.exeWG.Wait()
+	// Utilize Go routines end
 
 	c.Bus.Tick()
 
@@ -113,5 +155,44 @@ func (c *Computer) Tick() {
 
 func (c *Computer) Print(from, to types.HCWORD) {
 	c.MemoryBank.Print(from, to)
-	fmt.Println()
+}
+
+type Executer struct {
+	exeWG *sync.WaitGroup
+
+	worker chan []logic.LogicCell
+	stop   chan bool
+}
+
+func NewExecuter(exeWG *sync.WaitGroup) *Executer {
+	e := new(Executer)
+	e.exeWG = exeWG
+	e.worker = make(chan []logic.LogicCell)
+	e.stop = make(chan bool)
+	return e
+}
+
+func (e *Executer) Start() {
+	go func() {
+		for {
+			select {
+			case cells := <-e.worker:
+				for i := range cells {
+					cells[i].Tick()
+				}
+				e.exeWG.Done()
+
+			case <-e.stop:
+				return
+			}
+		}
+	}()
+}
+
+func (e *Executer) Stop() {
+	e.stop <- true
+}
+
+func (e *Executer) Exec(cells []logic.LogicCell) {
+	e.worker <- cells
 }
